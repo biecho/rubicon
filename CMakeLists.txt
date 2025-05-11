@@ -16,6 +16,7 @@ add_library(rubicon_pcp
         src/rubench.cpp
         src/rubench.hpp
         src/rubicon.hpp
+        src/test_block_merge.cpp
 )
 
 # ---------------------------------------------------------------------------
