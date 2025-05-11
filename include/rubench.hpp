@@ -25,7 +25,7 @@ struct rubench_get_blocks_data {
 };
 
 struct rubench_va_to_pa_data {
-    void *va;
+    void* va;
     unsigned long pa;
 };
 
@@ -38,5 +38,10 @@ void rubench_open();
 void rubench_close();
 
 int rubench_get_blocks();
-unsigned long rubench_va_to_pa(void *va);
+unsigned long rubench_va_to_pa(void* va);
 unsigned long rubench_read_phys(unsigned long pa);
+
+void run_microbenchmark(int num_rounds,
+                        void (*pre)(void),
+                        void (*func)(void),
+                        int (*post)(void));

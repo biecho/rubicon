@@ -1,20 +1,34 @@
-#include "rubench.hpp"
-#include "rubicon.hpp"
+/*
+* Copyright (C) 2025 Matej Bölcskei, ETH Zurich
+ * Licensed under the GNU General Public License as published by the Free Software Foundation, version 3.
+ * See LICENSE or <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+ *
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
+#include <rubench.h>
+#include <rubicon.h>
 
 #include <iostream>
+#include <stdio.h>
 
-int main()
-{
+void pre_pcp_evict() {
+}
+
+void microbenchmark_pcp_evict() { pcp_evict(); }
+
+int post_pcp_evict() {
+    int count = rubench_get_blocks();
+    printf("Number of pages in the PCP: %d\n", count);
+    return count != 0;
+}
+
+int main(void) {
     rubench_open();
 
-    auto blocks = rubench_get_blocks();
-
-    std::cout << "PCP list holds " << blocks << " blocks before PCP eviction\n";
-
-    pcp_evict();
-    blocks = rubench_get_blocks();
-
-    std::cout << "PCP list holds " << blocks << " blocks after PCP eviction\n";
+    run_microbenchmark(1000, pre_pcp_evict, microbenchmark_pcp_evict,
+                       post_pcp_evict);
 
     rubench_close();
+    return 0;
 }
