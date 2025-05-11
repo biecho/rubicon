@@ -1,0 +1,79 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-6bdd5ee2c915bdefd46d.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "rubicon",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "kmod::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-kmod-Debug-7a7688ebe2ae7da50f7e.json",
+					"name" : "kmod",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "rubicon_pcp::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-rubicon_pcp-Debug-42ec6b2bb18b58d31a10.json",
+					"name" : "rubicon_pcp",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "rubicon_pcp_demo::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-rubicon_pcp_demo-Debug-0052a1b375d3969b814a.json",
+					"name" : "rubicon_pcp_demo",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/local/home/dimeyer/rubicon/cmake-build-debug",
+		"source" : "/local/home/dimeyer/rubicon"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 7
+	}
+}

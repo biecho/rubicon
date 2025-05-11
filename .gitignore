@@ -1,0 +1,7 @@
+build/
+*.o
+*.ko
+*.cmd
+*.mod.c
+.*.swp
+
