@@ -33,3 +33,10 @@ struct rubench_read_phys_data {
     unsigned long pa;
     unsigned long data;
 };
+
+void rubench_open();
+void rubench_close();
+
+int rubench_get_blocks();
+unsigned long rubench_va_to_pa(void *va);
+unsigned long rubench_read_phys(unsigned long pa);

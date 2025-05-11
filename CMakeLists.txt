@@ -12,7 +12,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # 1. Library with the Rubicon user-space helper(s)
 # ---------------------------------------------------------------------------
 add_library(rubicon_pcp
-        src/pcp_evict.cpp
+        src/rubicon.cpp
+        src/rubench.cpp
 )
 
 target_include_directories(rubicon_pcp
@@ -25,13 +26,13 @@ target_include_directories(rubicon_pcp
 # ---------------------------------------------------------------------------
 # 2. Demo / example program
 # ---------------------------------------------------------------------------
-add_executable(rubicon_pcp_demo
-        examples/example.cpp
+add_executable(test_pcp_evict
+        src/test_pcp_evict.cpp
 )
-target_link_libraries(rubicon_pcp_demo PRIVATE rubicon_pcp)
+target_link_libraries(test_pcp_evict PRIVATE rubicon_pcp)
 
 # optional install rule
-install(TARGETS rubicon_pcp_demo RUNTIME DESTINATION bin)
+install(TARGETS test_pcp_evict RUNTIME DESTINATION bin)
 
 # ---------------------------------------------------------------------------
 # 3. Convenience target to build the kernel module with Kbuild
