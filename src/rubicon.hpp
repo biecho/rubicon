@@ -8,17 +8,9 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 int pcp_evict();
 
 int block_merge(void *target, unsigned order);
 
 int migratetype_escalation(void *bait, unsigned bait_order,
                            int (*bait_allocator)());
-
-#ifdef __cplusplus
-}
-#endif

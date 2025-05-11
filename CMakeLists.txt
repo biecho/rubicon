@@ -14,8 +14,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_library(rubicon_pcp
         src/rubicon.cpp
         src/rubench.cpp
-        include/rubench.hpp
-        include/rubicon.hpp
+        src/rubench.hpp
+        src/rubicon.hpp
 )
 
 # ---------------------------------------------------------------------------

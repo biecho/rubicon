@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include <rubicon.hpp>
+#include "rubicon.hpp"
 
 #include <fcntl.h>
 #include <sys/mman.h>

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include <rubench.hpp>
+#include "rubench.hpp"
 
 #include <fcntl.h>
 #include <stdio.h>

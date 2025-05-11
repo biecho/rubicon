@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-#include <rubench.h>
-#include <rubicon.h>
+#include "rubench.hpp"
+#include "rubicon.hpp"
 
 #include <iostream>
 #include <stdio.h>
