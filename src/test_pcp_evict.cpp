@@ -1,5 +1,5 @@
-#include <rubench.h>
-#include <rubicon.h>
+#include "rubench.hpp"
+#include "rubicon.hpp"
 
 #include <iostream>
 
@@ -12,6 +12,7 @@ int main()
     std::cout << "PCP list holds " << blocks << " blocks before PCP eviction\n";
 
     pcp_evict();
+    blocks = rubench_get_blocks();
 
     std::cout << "PCP list holds " << blocks << " blocks after PCP eviction\n";
 
