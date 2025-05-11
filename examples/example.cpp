@@ -1,5 +1,5 @@
 #include <rubicon/pcp_evict.hpp>
-#include <rubench_ioctl.h>
+#include <rubench.h>
 #include <fcntl.h>
 #include <iostream>
 #include <sys/ioctl.h>
@@ -7,9 +7,6 @@
 
 int main()
 {
-    // 1. Evict PCP
-    rubicon::evict_pcp();
-
     // 2. Query kernel module
     int fd = open("/dev/rubench", O_RDONLY);
     if (fd == -1) { perror("open /dev/rubench"); return 1; }
@@ -19,7 +16,19 @@ int main()
         perror("ioctl");
         return 1;
     }
+
+    std::cout << "PCP list holds " << d.num_pages << " pages before PCP eviction\n";
+
+
+    pcp_evict();
+
+
+    if (ioctl(fd, RUBENCH_GET_BLOCKS, &d) == -1) {
+        perror("ioctl");
+        return 1;
+    }
     close(fd);
 
-    std::cout << "PCP list now holds " << d.num_pages << " pages\n";
+    std::cout << "PCP list holds " << d.num_pages << " pages after PCP eviction\n";
+
 }

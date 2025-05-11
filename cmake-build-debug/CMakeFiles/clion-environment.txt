@@ -1,4 +1,0 @@
-ToolSet: 1.0 (local)Ninja: 1.12.1@/local/home/dimeyer/.cache/JetBrains/RemoteDev/dist/9e0128be961c6_CLion-2025.1/bin/ninja/linux/x64/ninja
-Options: 
-
-Options:-DCMAKE_MAKE_PROGRAM=/local/home/dimeyer/.cache/JetBrains/RemoteDev/dist/9e0128be961c6_CLion-2025.1/bin/ninja/linux/x64/ninja

@@ -1,77 +1,93 @@
-// SPDX-License-Identifier: MIT
+/*
+ * Copyright (C) 2025 Matej Bölcskei, ETH Zurich
+ * Licensed under the GNU General Public License as published by the Free Software Foundation, version 3.
+ * See LICENSE or <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+ * 
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 #include "rubicon/pcp_evict.hpp"
 
-#include <array>
-#include <cstdio>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <vector>
 
-namespace rubicon {
-namespace {
+#define PAGE_SIZE 0x1000UL
+#define PCP_FLUSH_SIZE 0x200000UL
+#define NUM_FLUSH_FILES 1000
+#define PCP_PUSH_SIZE 0x2000000UL
 
-// ----- tiny RAII helpers ----------------------------------------------------
-struct MMap {
-    void* addr = MAP_FAILED;
-    size_t len = 0;
+int pcp_evict() {
+  const char *buf = "ffffffffffffffff";
+  int fds[NUM_FLUSH_FILES];
 
-    ~MMap() {
-        if(addr != MAP_FAILED)
-            ::munmap(addr, len);
+  void *flush_ptr = mmap(NULL, PCP_FLUSH_SIZE, PROT_READ | PROT_WRITE,
+                         MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
+  if (flush_ptr == MAP_FAILED) {
+    return -1;
+  }
+
+  for (int i = 0; i < NUM_FLUSH_FILES; ++i) {
+    fds[i] = open("/tmp", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+    if (fds[i] == -1) {
+      return -1;
     }
-};
+    write(fds[i], buf, 8);
+  }
 
-struct FdArray {
-    std::vector<int> fds;
+  munmap(flush_ptr, PCP_FLUSH_SIZE);
 
-    ~FdArray() {
-        for(int fd : fds)
-            if(fd >= 0)
-                ::close(fd);
+  for (int i = 0; i < NUM_FLUSH_FILES; ++i) {
+    if (close(fds[i]) == -1) {
+      return -1;
     }
-};
+  }
 
-constexpr size_t kAnonBytes   = 2 * 1024 * 1024; // 2 MiB
-constexpr size_t kNumTmpFiles = 1000;
-constexpr auto kFill8         = "ffffffff"; // 8 B payload
-
-} // anonymous namespace
-
-// ---------------------------------------------------------------------------
-// PUBLIC API
-// ---------------------------------------------------------------------------
-bool evict_pcp() noexcept {
-    // 1. Touch 2 MiB of anonymous memory (prefaulted to get real pages).
-    MMap area;
-    area.len  = kAnonBytes;
-    area.addr = ::mmap(nullptr,
-                       area.len,
-                       PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE,
-                       -1, 0);
-    if(area.addr == MAP_FAILED)
-        return false; // errno set by mmap
-
-    // 2. Create tmp-files and dirty one cache-line in each.
-    FdArray files;
-    files.fds.reserve(kNumTmpFiles);
-
-    for(size_t i = 0; i < kNumTmpFiles; ++i) {
-        int fd = ::open("/tmp", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
-        if(fd == -1)
-            return false; // errno from open
-
-        files.fds.push_back(fd);
-
-        ssize_t wr = ::write(fd, kFill8, sizeof(kFill8));
-        if(wr != static_cast<ssize_t>(sizeof(kFill8)))
-            return false; // errno from write
-    }
-
-    // 3. Both RAII objects (area & files) go out of scope here, triggering
-    //    munmap() + close() in their destructors  pages go back to the PCP
-    return true;
+  return 0;
 }
 
-} // namespace rubicon
+int block_merge(void *target, unsigned order) {
+  if (munmap(target, PAGE_SIZE << order)) {
+    return -1;
+  }
+
+  if (order == 0) {
+    return 0;
+  }
+
+  void *flush_ptr = mmap(NULL, PCP_PUSH_SIZE, PROT_READ | PROT_WRITE,
+                         MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
+  if (flush_ptr == MAP_FAILED) {
+    return -1;
+  }
+
+  return munmap(flush_ptr, PCP_PUSH_SIZE);
+}
+
+void *exhaust_blocks(unsigned long *exhaust_size) {
+  *exhaust_size =
+      sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE) - 0x10000000UL;
+
+  return mmap(NULL, *exhaust_size, PROT_READ | PROT_WRITE,
+              MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+}
+
+int migratetype_escalation(void *bait, unsigned bait_order,
+                           int (*bait_allocator)()) {
+  unsigned long exhaust_size;
+
+  void *exhaust_ptr = exhaust_blocks(&exhaust_size);
+  if (exhaust_ptr == MAP_FAILED) {
+    return -1;
+  }
+
+  if (block_merge(bait, bait_order)) {
+    return -1;
+  }
+
+  if (bait_allocator()) {
+    return -1;
+  }
+
+  return munmap(exhaust_ptr, exhaust_size);
+}
