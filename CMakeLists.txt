@@ -14,13 +14,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_library(rubicon_pcp
         src/rubicon.cpp
         src/rubench.cpp
-)
-
-target_include_directories(rubicon_pcp
-        PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/uapi>
-        $<INSTALL_INTERFACE:include>
+        include/rubench.hpp
+        include/rubicon.hpp
 )
 
 # ---------------------------------------------------------------------------
