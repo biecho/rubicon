@@ -16,7 +16,6 @@ add_library(rubicon_pcp
         src/rubench.cpp
         src/rubench.hpp
         src/rubicon.hpp
-        src/test_block_merge.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -32,8 +31,10 @@ add_executable(test_block_merge
 )
 target_link_libraries(test_block_merge PRIVATE rubicon_pcp)
 
-# optional install rule
-install(TARGETS test_pcp_evict RUNTIME DESTINATION bin)
+add_executable(test_mtype_escalate
+        src/test_mtype_escalate.cpp
+)
+target_link_libraries(test_mtype_escalate PRIVATE rubicon_pcp)
 
 # ---------------------------------------------------------------------------
 # 3. Convenience target to build the kernel module with Kbuild
