@@ -11,102 +11,49 @@
 
 #include <cstdio>
 #include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
-
-// Size of the virtual-address range covered by one x86-64 4 KiB page table
-inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
-
-#define TARGET_OFFSET 0x10000UL
-
-#define NR_PAGE_TABLES_SPRAY 63000UL
-#define SPRAY_START 0x100000000UL
-
-struct spray_args_t {
-    void* start;
-    int fd;
-    std::size_t nr_tables;
-};
-
-int spray_tables(const spray_args_t& args) {
-    for(unsigned i = 0; i < args.nr_tables; ++i) {
-        void* addr = args.start + kX86_64PageTableSpan * i;
-
-        if(mmap(addr, PAGE_SIZE,
-                PROT_READ | PROT_WRITE,
-                MAP_FIXED | MAP_SHARED | MAP_POPULATE,
-                args.fd, 0) == MAP_FAILED) {
-            std::perror("spray_tables");
-            return -1;
-        }
-    }
-    return 0;
-}
-
-int spray_tables(void* ctx) {
-    return spray_tables(*static_cast<spray_args_t*>(ctx));
-}
-
-int unspray_tables(const spray_args_t& args) {
-    for(unsigned i = 1; i < args.nr_tables; ++i) {
-        void* addr = (void*)(args.start + kX86_64PageTableSpan * i);
-        if(munmap(addr, PAGE_SIZE)) {
-            printf("Failed to unspray tables\n");
-            return -1;
-        }
-    }
-
-    return 0;
+int pt_spray_bait_allocator(void* ctx) {
+    return pt_spray_tables(*static_cast<pt_spray_args_t*>(ctx));
 }
 
 int main() {
     rubench_open();
-
 
     int num_rounds       = 100;
     long long total_time = 0;
     int num_fails        = 0;
     const char* buf      = "ffffffffffffffff";
 
-    int fd_spray;
-    void* file_ptr;
-    unsigned long file_phys;
-
-    void* pageblock;
-
-    void* target;
-    unsigned long target_phys;
-
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
 
-        pageblock = get_page_block();
+        void* pageblock = get_page_block();
 
-        fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        int fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
         write(fd_spray, buf, 8);
-        file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                        MAP_SHARED | MAP_POPULATE, fd_spray, 0);
+        void* file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                              MAP_SHARED | MAP_POPULATE, fd_spray, 0);
         mlock(file_ptr, PAGE_SIZE);
 
-        file_phys = rubench_va_to_pa(file_ptr);
+        unsigned long file_phys = rubench_va_to_pa(file_ptr);
 
-        target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
+        void* target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
         mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
-        target_phys = rubench_va_to_pa(target);
+        unsigned long target_phys = rubench_va_to_pa(target);
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
 
-        auto spray_args = spray_args_t{
+        auto spray_args = pt_spray_args_t{
             .start = (void*)SPRAY_START,
             .fd = fd_spray,
             .nr_tables = NR_PAGE_TABLES_SPRAY,
         };
 
-        migratetype_escalation(bait_ptr, 9, spray_tables, &spray_args);
-        unspray_tables(spray_args);
+        migratetype_escalation(bait_ptr, 9, pt_spray_bait_allocator,
+                               &spray_args);
+        pt_unspray_tables(spray_args);
 
         // Move the target as next candidate for page table allocation
         munlock(target, PAGE_SIZE);
