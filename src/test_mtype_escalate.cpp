@@ -31,18 +31,6 @@ static void* pageblock;
 static void* target;
 static unsigned long target_phys;
 
-void open_spraying_file() {
-    const char* buf = "ffffffffffffffff";
-
-    fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
-    write(fd_spray, buf, 8);
-    file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                    MAP_SHARED | MAP_POPULATE, fd_spray, 0);
-    mlock(file_ptr, PAGE_SIZE);
-
-    file_phys = rubench_va_to_pa(file_ptr);
-}
-
 void close_spraying_file() {
     munlock(file_ptr, PAGE_SIZE);
     munmap(file_ptr, PAGE_SIZE);
@@ -96,12 +84,21 @@ int main(void) {
     int num_rounds       = 100;
     long long total_time = 0;
     int num_fails        = 0;
+    const char* buf = "ffffffffffffffff";
 
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
 
         pageblock = get_page_block();
-        open_spraying_file();
+
+        fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        write(fd_spray, buf, 8);
+        file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_SHARED | MAP_POPULATE, fd_spray, 0);
+        mlock(file_ptr, PAGE_SIZE);
+
+        file_phys = rubench_va_to_pa(file_ptr);
+
         target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
         mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
         target_phys = rubench_va_to_pa(target);
