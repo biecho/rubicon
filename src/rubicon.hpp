@@ -8,6 +8,11 @@
 
 #pragma once
 
+#define PAGE_SIZE 0x1000UL
+#define PAGEBLOCK_SIZE 0x200000UL
+
+void* get_page_block();
+
 int pcp_evict();
 
 int block_merge(void *target, unsigned order);
