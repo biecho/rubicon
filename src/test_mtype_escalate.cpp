@@ -31,12 +31,6 @@ static void* pageblock;
 static void* target;
 static unsigned long target_phys;
 
-void close_spraying_file() {
-    munlock(file_ptr, PAGE_SIZE);
-    munmap(file_ptr, PAGE_SIZE);
-    close(fd_spray);
-}
-
 int spray_tables() {
     for(unsigned i = 0; i < NR_VMA_LIMIT; ++i) {
         void* addr = (void*)(SPRAY_START + PAGE_TABLE_BACKED_SIZE * i);
@@ -113,7 +107,9 @@ int main(void) {
 
         munmap((void*)SPRAY_START, PAGE_SIZE);
         munmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
-        close_spraying_file();
+        munlock(file_ptr, PAGE_SIZE);
+        munmap(file_ptr, PAGE_SIZE);
+        close(fd_spray);
         munlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
