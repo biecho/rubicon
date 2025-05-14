@@ -30,6 +30,8 @@ int main() {
         printf("Round %d\n", round);
 
         void* pageblock = get_page_block();
+        void* target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
+        mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
 
         int fd_shm = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
         write(fd_shm, buf, 8);
@@ -38,9 +40,6 @@ int main() {
         mlock(file_ptr, PAGE_SIZE);
 
         unsigned long file_phys = rubench_va_to_pa(file_ptr);
-
-        void* target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
-        mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
         unsigned long target_phys = rubench_va_to_pa(target);
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
