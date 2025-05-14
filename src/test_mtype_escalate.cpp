@@ -24,7 +24,7 @@ int main() {
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
 
-        void* pageblock = get_page_block();
+        void* pageblock = get_4mb_block();
         void* target    = (void*)((unsigned long)pageblock + TARGET_OFFSET);
         mlock((void*)(unsigned long)target, PAGE_SIZE);
         unsigned long target_phys = rubench_va_to_pa(target);

@@ -1,5 +1,3 @@
-
-
 #include "rubench.hpp"
 #include "rubicon.hpp"
 
@@ -24,6 +22,8 @@ void* get_page_block_once() {
         exit(EXIT_FAILURE);
     }
 
+    size_t block_size = 2 * PAGEBLOCK_SIZE;
+
     // Locate the last page we own and compute its PA.
     // The end of the drained region is the part most likely to lie in
     // a freshly-split, contiguous block, because the allocator consumes
@@ -36,15 +36,15 @@ void* get_page_block_once() {
     //  its 2 MiB region and then go one full block backwards so the whole
     //  range belongs to us.
     void* page_block_aligned = (void*)((unsigned long)drain_end -
-        (drain_end_phys % PAGEBLOCK_SIZE) - PAGEBLOCK_SIZE);
+        (drain_end_phys % block_size) - block_size);
 
     // Remap exactly that 2 MiB span to a fixed VA
     // Using MREMAP_FIXED lets us park the block at a predictable
     // virtual address (REMAP_ADDRESS) without copying. The physical
     // pages stay put; only page tables change, which is cheap and keeps
     // the block contiguous.
-    void* page_block = mremap(page_block_aligned, PAGEBLOCK_SIZE,
-                              PAGEBLOCK_SIZE,
+    void* page_block = mremap(page_block_aligned, block_size,
+                              block_size,
                               MREMAP_FIXED | MREMAP_MAYMOVE, REMAP_ADDRESS);
 
     // No further use for the huge ‘drain’ region – free it to relieve
@@ -53,19 +53,19 @@ void* get_page_block_once() {
 
     unsigned long start_phys = rubench_va_to_pa(page_block);
     unsigned long end_phys   = rubench_va_to_pa(
-        (void*)((unsigned long)page_block + PAGEBLOCK_SIZE - PAGE_SIZE));
+        (void*)((unsigned long)page_block + block_size - PAGE_SIZE));
 
     // Heuristic check if it's continuous.
-    if(start_phys % PAGEBLOCK_SIZE == 0 &&
-        end_phys % PAGEBLOCK_SIZE == PAGEBLOCK_SIZE - PAGE_SIZE) {
+    if(start_phys % block_size == 0 &&
+        end_phys % block_size == block_size - PAGE_SIZE) {
         return page_block;
     }
 
     return MAP_FAILED;
 }
 
-void* get_page_block() {
-    void *pageblock;
+void* get_4mb_block() {
+    void* pageblock;
 
     do {
         pageblock = get_page_block_once();
@@ -73,4 +73,3 @@ void* get_page_block() {
 
     return pageblock;
 }
-

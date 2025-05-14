@@ -33,7 +33,7 @@ int pt_spray_tables(const pt_spray_args_t& args);
 int pt_unspray_tables(const pt_spray_args_t& args);
 
 
-void* get_page_block();
+void* get_4mb_block();
 
 
 int pcp_evict();
