@@ -114,9 +114,29 @@ int post_migratetype_escalation() {
 int main(void) {
     rubench_open();
 
-    run_microbenchmark(100, pre_migratetype_escalation,
-                       microbenchmark_migratetype_escalation,
-                       post_migratetype_escalation);
+
+    int num_rounds = 100;
+    long long total_time = 0;
+    int num_fails        = 0;
+
+    for(int round = 0; round < num_rounds; round++) {
+        printf("Round %d\n", round);
+
+        pre_migratetype_escalation();
+
+        microbenchmark_migratetype_escalation();
+
+        if(post_migratetype_escalation()) {
+            num_fails++;
+            printf("FAIL\n");
+        } else {
+            printf("PASS\n");
+        }
+    }
+
+    printf("Number of failed tests: %d\n", num_fails);
+    printf("Average time taken: %lld ns\n",
+           total_time / (num_rounds - num_fails));
 
     rubench_close();
     return 0;
