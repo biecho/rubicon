@@ -58,6 +58,13 @@ pt_install_ctxt pt_install(void* page_block, void* pt_target) {
     return pt_ctxt;
 }
 
+void pt_deallocate(pt_install_ctxt pt_ctxt) {
+    close(pt_ctxt.fd);
+    munlock(pt_ctxt.fd_ptr, PAGE_SIZE);
+    munmap(pt_ctxt.fd_ptr, PAGE_SIZE);
+    munmap(pt_ctxt.pt_mapped, PAGE_SIZE);
+}
+
 int main() {
     rubench_open();
 
@@ -89,10 +96,7 @@ int main() {
             printf("FAIL\n");
         }
 
-        close(pt_ctxt.fd);
-        munlock(pt_ctxt.fd_ptr, PAGE_SIZE);
-        munmap(pt_ctxt.fd_ptr, PAGE_SIZE);
-        munmap(pt_ctxt.pt_mapped, PAGE_SIZE);
+        pt_deallocate(pt_ctxt);
 
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
