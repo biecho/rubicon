@@ -66,7 +66,8 @@ int block_merge(void* target, unsigned order) {
 
 int migratetype_escalation(void* bait,
                            unsigned bait_order,
-                           int (*bait_allocator)()) {
+                           int (*bait_allocator)(void*),
+                           void* alloc_ctx) {
     unsigned long exhaust_size = sysconf(_SC_AVPHYS_PAGES) *
         sysconf(_SC_PAGESIZE) - 0x10000000UL;
 
@@ -81,7 +82,7 @@ int migratetype_escalation(void* bait,
         return -1;
     }
 
-    if(bait_allocator()) {
+    if(bait_allocator(alloc_ctx)) {
         return -1;
     }
 

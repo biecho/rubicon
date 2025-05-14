@@ -15,7 +15,9 @@ void* get_page_block();
 
 int pcp_evict();
 
-int block_merge(void *target, unsigned order);
+int block_merge(void* target, unsigned order);
 
-int migratetype_escalation(void *bait, unsigned bait_order,
-                           int (*bait_allocator)());
+int migratetype_escalation(void* bait,
+                           unsigned bait_order,
+                           int (*bait_allocator)(void*),
+                           void* alloc_ctx);
