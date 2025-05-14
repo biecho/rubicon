@@ -31,10 +31,10 @@ int main() {
 
         void* pageblock = get_page_block();
 
-        int fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
-        write(fd_spray, buf, 8);
+        int fd_shm = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        write(fd_shm, buf, 8);
         void* file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                              MAP_SHARED | MAP_POPULATE, fd_spray, 0);
+                              MAP_SHARED | MAP_POPULATE, fd_shm, 0);
         mlock(file_ptr, PAGE_SIZE);
 
         unsigned long file_phys = rubench_va_to_pa(file_ptr);
@@ -47,7 +47,7 @@ int main() {
 
         auto spray_args = pt_spray_args_t{
             .start = (void*)SPRAY_START,
-            .fd = fd_spray,
+            .fd = fd_shm,
             .nr_tables = NR_PAGE_TABLES_SPRAY,
         };
 
@@ -61,7 +61,7 @@ int main() {
         // Install the page table at the target.
         mmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
              PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
-             fd_spray,
+             fd_shm,
              0);
 
         unsigned long value = rubench_read_phys(target_phys);
@@ -81,7 +81,7 @@ int main() {
         munmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
         munlock(file_ptr, PAGE_SIZE);
         munmap(file_ptr, PAGE_SIZE);
-        close(fd_spray);
+        close(fd_shm);
         munlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
