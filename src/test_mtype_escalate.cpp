@@ -20,8 +20,8 @@ int pt_spray_bait_allocator(void* ctx) {
 
 struct pt_install_ctxt {
     int fd;
-    void *fd_ptr;
-    void *pt_mapped;
+    void* fd_ptr;
+    void* pt_mapped;
 };
 
 int main() {
@@ -36,22 +36,24 @@ int main() {
         printf("Round %d\n", round);
 
         void* pageblock = get_page_block();
-        void* target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
+        void* target    = (void*)((unsigned long)pageblock + TARGET_OFFSET);
         mlock((void*)(unsigned long)target, PAGE_SIZE);
 
-        int fd_shm = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
-        write(fd_shm, buf, 8);
-        void* fd_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                              MAP_SHARED | MAP_POPULATE, fd_shm, 0);
-        mlock(fd_ptr, PAGE_SIZE);
+        auto pt_ctxt = pt_install_ctxt{};
 
-        unsigned long file_phys = rubench_va_to_pa(fd_ptr);
+        pt_ctxt.fd = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        write(pt_ctxt.fd, buf, 8);
+        pt_ctxt.fd_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                              MAP_SHARED | MAP_POPULATE, pt_ctxt.fd, 0);
+        mlock(pt_ctxt.fd_ptr, PAGE_SIZE);
+
+        unsigned long file_phys   = rubench_va_to_pa(pt_ctxt.fd_ptr);
         unsigned long target_phys = rubench_va_to_pa(target);
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
         auto spray_args = pt_spray_args_t{
             .start = (void*)SPRAY_START,
-            .fd = fd_shm,
+            .fd = pt_ctxt.fd,
             .nr_tables = NR_PAGE_TABLES_SPRAY,
         };
 
@@ -63,10 +65,11 @@ int main() {
         munlock(target, PAGE_SIZE);
         block_merge(target, 0);
         // Install the page table at the target.
-        auto pt_mapped = mmap(spray_args.start + PAGEBLOCK_SIZE, PAGE_SIZE,
-             PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
-             fd_shm,
-             0);
+        pt_ctxt.pt_mapped = mmap(spray_args.start + PAGEBLOCK_SIZE, PAGE_SIZE,
+                                 PROT_READ | PROT_WRITE,
+                                 MAP_FIXED | MAP_SHARED | MAP_POPULATE,
+                                 pt_ctxt.fd,
+                                 0);
 
         unsigned long value = rubench_read_phys(target_phys);
 
@@ -81,10 +84,10 @@ int main() {
             printf("FAIL\n");
         }
 
-        close(fd_shm);
-        munlock(fd_ptr, PAGE_SIZE);
-        munmap(fd_ptr, PAGE_SIZE);
-        munmap(pt_mapped, PAGE_SIZE);
+        close(pt_ctxt.fd);
+        munlock(pt_ctxt.fd_ptr, PAGE_SIZE);
+        munmap(pt_ctxt.fd_ptr, PAGE_SIZE);
+        munmap(pt_ctxt.pt_mapped, PAGE_SIZE);
 
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
