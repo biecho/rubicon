@@ -16,6 +16,9 @@ add_library(rubicon_pcp
         src/rubench.cpp
         src/rubench.hpp
         src/rubicon.hpp
+        src/page_block.cpp
+        src/pt_spray.cpp
+        src/pt_install.cpp
 )
 
 # ---------------------------------------------------------------------------
