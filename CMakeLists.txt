@@ -45,3 +45,11 @@ add_custom_target(kmod
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/kmod
         COMMENT "Building kernel module rubench.ko with external Kbuild"
 )
+
+target_include_directories(rubicon_pcp
+        PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>   # when built inside another project
+        $<INSTALL_INTERFACE:include>                        # when installed
+)
+
+add_library(rubicon::rubicon_pcp ALIAS rubicon_pcp)         # modern alias
