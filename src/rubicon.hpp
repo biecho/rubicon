@@ -21,6 +21,14 @@ inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
 #define NR_PAGE_TABLES_SPRAY 63000UL
 #define SPRAY_START 0x100000000UL
 
+struct pt_install_ctxt {
+    int fd;
+    void* fd_ptr;
+    void* pt_mapped;
+};
+pt_install_ctxt pt_install(void* page_block, void* pt_target);
+void pt_deallocate(const pt_install_ctxt& pt_ctxt);
+
 struct pt_spray_args_t {
     void* start;
     int fd;
