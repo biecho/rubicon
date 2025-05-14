@@ -135,13 +135,14 @@ void pre_migratetype_escalation() {
         pageblock = get_page_block();
     } while(pageblock == MAP_FAILED);
 
-    target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
-    mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
-    target_phys = rubench_va_to_pa(target);
     open_spraying_file();
 }
 
 void microbenchmark_migratetype_escalation() {
+    target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
+    mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+    target_phys = rubench_va_to_pa(target);
+
     void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
     migratetype_escalation(bait_ptr, 9, spray_tables);
     unspray_tables();
