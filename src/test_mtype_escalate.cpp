@@ -9,6 +9,7 @@
 #include "rubench.hpp"
 #include "rubicon.hpp"
 
+#include <cstdio>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,25 +35,28 @@ static void* target;
 static unsigned long target_phys;
 
 struct spray_args_t {
-    void*   start;
-    int     fd;
+    void* start;
+    int fd;
     std::size_t nr_tables;
 };
 
-int spray_tables(void* ctx) {
-    auto* a = static_cast<spray_args_t*>(ctx);
+int spray_tables(const spray_args_t& args) {
+    for(unsigned i = 0; i < args.nr_tables; ++i) {
+        void* addr = args.start + kX86_64PageTableSpan * i;
 
-    for(unsigned i = 0; i < a->nr_tables; ++i) {
-        void* addr = (void*)(a->start + kX86_64PageTableSpan * i);
-        if(mmap(addr, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                MAP_FIXED | MAP_SHARED | MAP_POPULATE, a->fd,
-                0) == MAP_FAILED) {
-            printf("Failed to spray tables\n");
+        if(mmap(addr, PAGE_SIZE,
+                PROT_READ | PROT_WRITE,
+                MAP_FIXED | MAP_SHARED | MAP_POPULATE,
+                args.fd, 0) == MAP_FAILED) {
+            std::perror("spray_tables");
             return -1;
         }
     }
-
     return 0;
+}
+
+int spray_tables(void* ctx) {
+    return spray_tables(*static_cast<spray_args_t*>(ctx));
 }
 
 void unspray_tables() {
@@ -93,7 +97,7 @@ int main(void) {
 
         void* bait_ptr = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
 
-        auto spray_args  = spray_args_t{
+        auto spray_args = spray_args_t{
             .start = (void*)SPRAY_START,
             .fd = fd_spray,
             .nr_tables = NR_PAGE_TABLES_SPRAY,
