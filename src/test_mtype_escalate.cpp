@@ -10,6 +10,8 @@
 #include "rubicon.hpp"
 
 #include <cstdio>
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/mman.h>
 
 int main() {
@@ -27,11 +29,18 @@ int main() {
         mlock((void*)(unsigned long)target, PAGE_SIZE);
         unsigned long target_phys = rubench_va_to_pa(target);
 
-        auto addr = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
-        auto pt_ctxt = pt_install(pageblock, target, addr);
+        const char* buf = "ffffffffffffffff";
+        auto fd = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        write(fd, buf, 8);
+        auto fd_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+                           MAP_SHARED | MAP_POPULATE, fd, 0);
+        mlock(fd_ptr, PAGE_SIZE);
+
+        auto addr    = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
+        pt_install(pageblock, target, addr, fd);
 
         unsigned long value = rubench_read_phys(target_phys);
-        auto file_phys      = rubench_va_to_pa(pt_ctxt.fd_ptr);
+        auto file_phys      = rubench_va_to_pa(fd_ptr);
 
         printf("Pageblock physical address: %lx\n", target_phys);
         printf("File physical address: %lx\n", file_phys);
@@ -44,7 +53,9 @@ int main() {
             printf("FAIL\n");
         }
 
-        pt_deallocate(pt_ctxt);
+        close(fd);
+        munlock(fd_ptr, PAGE_SIZE);
+        munmap(fd_ptr, PAGE_SIZE);
 
         munmap(addr, PAGE_SIZE);
         munmap(pageblock, PAGEBLOCK_SIZE);
