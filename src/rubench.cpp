@@ -48,38 +48,10 @@ int rubench_get_blocks() {
     return data_struct.num_pages;
 }
 
+#include "pagemap.hpp"
+
 unsigned long rubench_va_to_pa(void* va) {
-    static int pagemap_fd = -1;
-    const auto page_size  = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
-
-    /* open /proc/self/pagemap once and reuse it */
-    if(pagemap_fd == -1) {
-        pagemap_fd = ::open("/proc/self/pagemap", O_RDONLY);
-        if(pagemap_fd < 0) {
-            std::perror("open(/proc/self/pagemap)");
-            std::exit(EXIT_FAILURE);
-        }
-    }
-
-    const auto virt_addr   = reinterpret_cast<std::uint64_t>(va);
-    const auto file_offset = (virt_addr / page_size) * sizeof(std::uint64_t);
-    auto entry             = 0;
-
-    if(::pread(pagemap_fd, &entry, sizeof(entry), file_offset) != sizeof(
-        entry)) {
-        std::perror("pread(pagemap)");
-        std::exit(EXIT_FAILURE);
-    }
-
-    if(!(entry & pagemap_present_bit)) {
-        std::cerr << "rubench_va_to_pa: page 0x"
-            << std::hex << virt_addr
-            << " not present (entry = 0x" << entry << ")\n";
-        std::exit(EXIT_FAILURE);
-    }
-
-    const auto pfn = entry & pagemap_pfn_mask;
-    return pfn * page_size + virt_addr % page_size;
+    return vaddr2paddr((uint64_t)va);
 }
 
 unsigned long rubench_read_phys(unsigned long pa) {
