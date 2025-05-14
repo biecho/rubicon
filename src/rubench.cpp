@@ -12,6 +12,16 @@
 #include <cstdio>
 #include <sys/types.h>
 #include <iostream>
+#include <stdint.h>
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <time.h>
+
+#include "pagemap.hpp"
 
 // bit-63: page present
 constexpr std::uint64_t pagemap_present_bit = 1ULL << 63;
@@ -19,13 +29,13 @@ constexpr std::uint64_t pagemap_present_bit = 1ULL << 63;
 // bits 0-54: PFN
 constexpr std::uint64_t pagemap_pfn_mask = (1ULL << 55) - 1;
 
-#include <fcntl.h>
-#include <stdio.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <time.h>
 
 static int rubench_fd = -1;
+
+unsigned long rubench_va_to_pa(void* va) {
+    return vaddr2paddr((uint64_t)va);
+}
+
 
 void rubench_open() {
     rubench_fd = open("/dev/" DEVICE_NAME, O_RDWR);
@@ -48,23 +58,43 @@ int rubench_get_blocks() {
     return data_struct.num_pages;
 }
 
-#include "pagemap.hpp"
-
-unsigned long rubench_va_to_pa(void* va) {
-    return vaddr2paddr((uint64_t)va);
-}
-
 unsigned long rubench_read_phys(unsigned long pa) {
-    struct rubench_read_phys_data data_struct;
-    data_struct.pa = pa;
+    static int mem_fd = -1;
 
-    if(ioctl(rubench_fd, RUBENCH_READ_PHYS, &data_struct) < 0) {
-        printf("Failed to read physical memory\n");
+    /* open /dev/mem once and reuse it */
+    if(mem_fd == -1) {
+        mem_fd = open("/dev/mem", O_RDONLY | O_CLOEXEC);
+        if(mem_fd == -1) {
+            perror("open(/dev/mem)");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    unsigned long data = 0;
+    ssize_t read_len   =
+        pread64(mem_fd, &data, sizeof(data), (off64_t)pa);
+
+    if(read_len != (ssize_t)sizeof(data)) {
+        fprintf(stderr,
+                "rubench_read_phys: pread64 failed at PA 0x%lx (%s)\n",
+                pa, strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    return data_struct.data;
+    return data;
 }
+
+//unsigned long rubench_read_phys(unsigned long pa) {
+//    struct rubench_read_phys_data data_struct;
+//    data_struct.pa = pa;
+//
+//    if(ioctl(rubench_fd, RUBENCH_READ_PHYS, &data_struct) < 0) {
+//        printf("Failed to read physical memory\n");
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    return data_struct.data;
+//}
 
 long long time_round(void (*func)(void)) {
     struct timespec start, end;
