@@ -61,22 +61,6 @@ void unspray_tables() {
     }
 }
 
-int post_migratetype_escalation() {
-    unsigned long value = rubench_read_phys(target_phys);
-
-    printf("Pageblock physical address: %lx\n", target_phys);
-    printf("File physical address: %lx\n", file_phys);
-    printf("Value read from target: %lx\n", value);
-
-    munmap((void*)SPRAY_START, PAGE_SIZE);
-    munmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
-    close_spraying_file();
-
-    munlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
-    munmap(pageblock, PAGEBLOCK_SIZE);
-    return (value & 0xFFFFFFFFF000) != file_phys;
-}
-
 int main(void) {
     rubench_open();
 
@@ -114,12 +98,24 @@ int main(void) {
              fd_spray,
              0);
 
-        if(post_migratetype_escalation()) {
-            num_fails++;
-            printf("FAIL\n");
-        } else {
+        unsigned long value = rubench_read_phys(target_phys);
+
+        printf("Pageblock physical address: %lx\n", target_phys);
+        printf("File physical address: %lx\n", file_phys);
+        printf("Value read from target: %lx\n", value);
+        auto success = (value & 0xFFFFFFFFF000) == file_phys;
+
+        if(success) {
             printf("PASS\n");
+        } else {
+            printf("FAIL\n");
         }
+
+        munmap((void*)SPRAY_START, PAGE_SIZE);
+        munmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE);
+        close_spraying_file();
+        munlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
+        munmap(pageblock, PAGEBLOCK_SIZE);
     }
 
     printf("Number of failed tests: %d\n", num_fails);
