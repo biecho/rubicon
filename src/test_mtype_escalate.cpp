@@ -27,7 +27,8 @@ int main() {
         mlock((void*)(unsigned long)target, PAGE_SIZE);
         unsigned long target_phys = rubench_va_to_pa(target);
 
-        auto pt_ctxt = pt_install(pageblock, target);
+        auto addr = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
+        auto pt_ctxt = pt_install(pageblock, target, addr);
 
         unsigned long value = rubench_read_phys(target_phys);
         auto file_phys      = rubench_va_to_pa(pt_ctxt.fd_ptr);
@@ -45,6 +46,7 @@ int main() {
 
         pt_deallocate(pt_ctxt);
 
+        munmap(addr, PAGE_SIZE);
         munmap(pageblock, PAGEBLOCK_SIZE);
     }
 

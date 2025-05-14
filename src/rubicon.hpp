@@ -24,9 +24,9 @@ inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
 struct pt_install_ctxt {
     int fd;
     void* fd_ptr;
-    void* pt_mapped;
 };
-pt_install_ctxt pt_install(void* page_block, void* pt_target);
+
+pt_install_ctxt pt_install(void* page_block, void* pt_target, void* addr);
 void pt_deallocate(const pt_install_ctxt& pt_ctxt);
 
 struct pt_spray_args_t {
