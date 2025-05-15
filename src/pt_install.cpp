@@ -9,8 +9,7 @@ int pt_spray_bait_allocator(void* ctx) {
 }
 
 void
-* pt_install(void* page_block, void* pt_target, void* addr, int fd) {
-    void* bait_ptr  = (void*)((unsigned long)page_block + PAGEBLOCK_SIZE / 2);
+* pt_install(void* bait_ptr, void* pt_target, void* addr, int fd) {
     auto spray_args = pt_spray_args_t{
         .start = (void*)SPRAY_START,
         .fd = fd,
