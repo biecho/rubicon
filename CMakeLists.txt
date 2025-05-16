@@ -17,7 +17,6 @@ add_library(rubicon_pcp
         src/rubench.hpp
         src/rubicon.hpp
         src/page_block.cpp
-        src/pt_spray.cpp
         src/pt_install.cpp
         src/pagemap.hpp
 )
