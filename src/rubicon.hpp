@@ -16,7 +16,7 @@ inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
 #define NR_PAGE_TABLES_SPRAY 63000UL
 #define SPRAY_START 0x100000000UL
 
-void* pt_install(const std::vector<void*>& bait_pages, void* pt_target, void* addr, int fd_spray);
+void* pt_install(const std::vector<void*>& bait_pages, void* pt_target, void* addr, const std::vector<void*>& spray_pages, int fd_spray);
 
 unsigned long exhaust_pages_size_bytes();
 void* get_4mb_block();

