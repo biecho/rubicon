@@ -24,16 +24,6 @@ add_library(rubicon_pcp
 # ---------------------------------------------------------------------------
 # 2. Demo / example program
 # ---------------------------------------------------------------------------
-add_executable(test_pcp_evict
-        src/test_pcp_evict.cpp
-)
-target_link_libraries(test_pcp_evict PRIVATE rubicon_pcp)
-
-add_executable(test_block_merge
-        src/test_block_merge.cpp
-)
-target_link_libraries(test_block_merge PRIVATE rubicon_pcp)
-
 add_executable(test_mtype_escalate
         src/test_mtype_escalate.cpp
 )

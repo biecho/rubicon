@@ -89,22 +89,27 @@ void* flip_bit(void* addr, unsigned pos) {
     return reinterpret_cast<void*>(v);
 }
 
-inline void print_ptr_hex(const char* label, void* ptr)
-{
+inline void print_ptr_hex(const char* label, void* ptr) {
     std::ios old_state(nullptr);
-    old_state.copyfmt(std::cout);            // save caller’s formatting
+    old_state.copyfmt(std::cout); // save caller’s formatting
 
     std::cout << label << ": 0x"
-              << std::hex << std::setw(sizeof(uintptr_t) * 2)
-              << std::setfill('0')
-              << reinterpret_cast<uintptr_t>(ptr)
-              << '\n';
+        << std::hex << std::setw(sizeof(uintptr_t) * 2)
+        << std::setfill('0')
+        << reinterpret_cast<uintptr_t>(ptr)
+        << '\n';
 
-    std::cout.copyfmt(old_state);            // restore formatting
+    std::cout.copyfmt(old_state); // restore formatting
 }
 
 int main() {
     rubench_open();
+
+    void* page_block_base = (void*)0x100000000UL;
+    void* spray_base = (void*)0x200000000UL;
+    constexpr uint64_t spray_pt_count = 65000UL;
+    auto spray = strided_addresses(spray_base, spray_pt_count,
+                                   kX86_64PageTableSpan);
 
     int num_rounds       = 100;
     long long total_time = 0;
@@ -112,16 +117,21 @@ int main() {
 
     for(int round = 0; round < num_rounds; round++) {
         printf("Round %d\n", round);
+        std::cout << "spray size : " << spray.size() << '\n'
+            << "last addr  : 0x"
+            << std::hex << std::uppercase
+            << reinterpret_cast<std::uintptr_t>(spray.back())
+            << std::dec << '\n';
 
-        void* pageblock   = get_4mb_block();
+        page_block_base   = get_4mb_block(page_block_base);
         auto random_pages = random_pages_in_block(
-            pageblock, 2 * PAGEBLOCK_SIZE, 100);
+            page_block_base, 2 * kPageBlockSize, 100);
         void* pt_target = random_pages[0];
         mlock((void*)(unsigned long)pt_target, PAGE_SIZE);
         unsigned long target_phys = rubench_va_to_pa(pt_target);
 
         void* file_target = flip_bit(pt_target, 17);
-        random_pages[1] = file_target;
+        random_pages[1]   = file_target;
 
         print_ptr_hex("pt_target", pt_target);
         print_ptr_hex("file_target", file_target);
@@ -134,11 +144,11 @@ int main() {
                            MAP_SHARED | MAP_POPULATE, fd, 0);
         mlock(fd_ptr, PAGE_SIZE);
 
-        auto addr       = (void*)(SPRAY_START + PAGEBLOCK_SIZE);
-        auto bait_pages = strided_addresses(pageblock, 1ULL << 10, PAGE_SIZE);
+        auto addr       = (void*)(spray_base + kPageBlockSize);
+        auto bait_pages = strided_addresses(page_block_base, 1ULL << 10,
+                                            PAGE_SIZE);
         erase_pages(bait_pages, random_pages);
-
-        pt_install(bait_pages, pt_target, addr, fd);
+        pt_install(bait_pages, pt_target, addr, spray, fd);
 
         unsigned long value = rubench_read_phys(target_phys);
         auto file_phys      = rubench_va_to_pa(fd_ptr);
@@ -159,7 +169,7 @@ int main() {
         munmap(fd_ptr, PAGE_SIZE);
 
         munmap(addr, PAGE_SIZE);
-        munmap(pageblock, PAGEBLOCK_SIZE);
+        munmap(page_block_base, kPageBlockSize);
     }
 
     printf("Number of failed tests: %d\n", num_fails);
